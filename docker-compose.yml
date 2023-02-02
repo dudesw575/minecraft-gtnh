@@ -1,0 +1,16 @@
+version: '3.2'
+
+services:
+  mine:
+    build: .
+    ports:
+      - 25565:25565
+    volumes:
+      - ./eula.txt:/minecraft/eula.txt
+      - ./server.properties:/minecraft/server.properties
+      #- ./World:/minecraft/World
+      - ./whitelist.json:/minecraft/whitelist.json
+      - ./startserver.sh:/minecraft/startserver.sh
+    # restart: always
+    tty: true
+    stdin_open: true
