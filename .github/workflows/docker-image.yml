@@ -10,6 +10,8 @@ on:
       - "main"
 
   workflow_dispatch:
+    schedule:
+      - cron: "27 2 * * 4"
 
 jobs:
   docker:
@@ -23,11 +25,11 @@ jobs:
         uses: docker/setup-buildx-action@v2
       - name: Build an image from Dockerfile
         run: |
-          docker build -t docker.io/my-organization/my-app:${{ github.sha }} .
+          docker build -t dudesw575/mc-gtnh:${{ github.sha }} .
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "docker.io/my-organization/my-app:${{ github.sha }}"
+          image-ref: "dudesw575/mc-gtnh:${{ github.sha }}"
           format: "sarif"
           output: "trivy-results.sarif"
       - name: Upload Trivy scan results to GitHub Security tab
