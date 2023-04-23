@@ -32,4 +32,4 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
-          tags: dudesw575/gtnh:2.2.3
+          tags: dudesw575/mc-gtnh:2.2.3
