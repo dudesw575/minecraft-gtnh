@@ -1,7 +1,7 @@
 FROM eclipse-temurin:8-jre-alpine
 
-RUN apk add libssl3=3.0.8-r4
-RUN apk add libcrypto3=3.0.8-r4
+#RUN apk add libssl3=3.0.8-r4
+#RUN apk add libcrypto3=3.0.8-r4
 
 WORKDIR /minecraft
 #ADD http://downloads.gtnewhorizons.com/ServerPacks/GT_New_Horizons_2.2.3_SERVER.zip /gtnh.zip
