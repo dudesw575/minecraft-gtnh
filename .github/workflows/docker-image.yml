@@ -63,4 +63,4 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           push: true
-          tags: dudesw575/mc-gtnh:2.2.3
+          tags: dudesw575/mc-gtnh:2.4.0
