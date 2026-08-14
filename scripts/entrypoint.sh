@@ -17,6 +17,15 @@ fi
 
 cd "$SERVER_DIR"
 
+if [ "${EULA:-FALSE}" = "TRUE" ] || [ "${EULA:-FALSE}" = "true" ]; then
+  printf 'eula=true\n' > eula.txt
+fi
+
+if ! grep -Eq '^eula=true$' eula.txt 2>/dev/null; then
+  echo "EULA has not been accepted. Set EULA=TRUE or accept it in $SERVER_DIR/eula.txt." >&2
+  exit 1
+fi
+
 JAR="${FORGE_JAR:-}"
 if [ -z "$JAR" ]; then
   JAR="$(find . -maxdepth 3 -type f -name 'forge-*.jar' ! -name '*sources*' ! -name '*javadoc*' -print | sort | head -n 1)"
@@ -25,10 +34,6 @@ fi
 if [ -z "$JAR" ]; then
   echo "No Forge server jar found in $SERVER_DIR" >&2
   exit 1
-fi
-
-if [ ! -f eula.txt ]; then
-  printf 'eula=false\n' > eula.txt
 fi
 
 exec java \
