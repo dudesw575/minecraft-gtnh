@@ -1,0 +1,9 @@
+.git
+.github
+.gitignore
+*.zip
+*.sha256
+*.sha256sum
+smoke-data/
+server-pack/
+World/
