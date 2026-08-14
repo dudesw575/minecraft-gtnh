@@ -15,7 +15,9 @@ esac
 
 extract_server_url_from_history() {
   local version="$1"
-  curl -fsSL --retry 3 --retry-all-errors "$VERSION_HISTORY_URL" | python3 - "$version" <<'PY'
+  local page
+  page="$(curl -fsSL --retry 3 --retry-all-errors "$VERSION_HISTORY_URL")"
+  python3 - "$version" <<<"$page" <<'PY'
 import html
 import re
 import sys
@@ -23,9 +25,6 @@ import sys
 version = sys.argv[1]
 page = sys.stdin.read()
 
-# The official version-history page is the source of truth for stable/beta
-# releases. Extract the Server ZIP link for the requested release rather than
-# reconstructing its filename.
 pattern = re.compile(r'<h2[^>]*>\s*' + re.escape(version) + r'\s+[^<]*</h2>(.*?)(?=<h2\b|$)', re.I | re.S)
 match = pattern.search(page)
 if not match:
@@ -49,7 +48,9 @@ PY
 
 latest_release_version() {
   local mode="$1"
-  curl -fsSL --retry 3 --retry-all-errors "$VERSION_HISTORY_URL" | python3 - "$mode" <<'PY'
+  local page
+  page="$(curl -fsSL --retry 3 --retry-all-errors "$VERSION_HISTORY_URL")"
+  python3 - "$mode" <<<"$page" <<'PY'
 import html
 import re
 import sys
@@ -57,7 +58,7 @@ import sys
 mode = sys.argv[1]
 page = sys.stdin.read()
 
-for heading, section in re.findall(r'<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\b|$)', page, re.I | re.S):
+for heading, _section in re.findall(r'<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\b|$)', page, re.I | re.S):
     heading = html.unescape(re.sub(r'<[^>]+>', '', heading)).strip()
     if mode == "stable" and re.search(r'\bStable release$', heading, re.I):
         print(heading.rsplit(None, 2)[0])
@@ -70,7 +71,9 @@ PY
 }
 
 latest_nightly() {
-  curl -fsSL --retry 3 --retry-all-errors -H 'Accept: application/vnd.github+json' "$GITHUB_RELEASES_URL" | python3 - <<'PY'
+  local json
+  json="$(curl -fsSL --retry 3 --retry-all-errors -H 'Accept: application/vnd.github+json' "$GITHUB_RELEASES_URL")"
+  python3 - <<<"$json" <<'PY'
 import json
 import re
 import sys
@@ -110,8 +113,6 @@ else
   FILENAME="${SERVER_URL##*/}"
 fi
 
-# Validate that the exact official server archive exists before handing it to
-# the build. No mirror or source archive is accepted as a fallback.
 curl -fsSIL --retry 3 --retry-all-errors "$SERVER_URL" >/dev/null
 
 SHA256=""
