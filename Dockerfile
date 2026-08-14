@@ -37,11 +37,10 @@ EXPOSE 25565/tcp
 # archive out of the image history and final image layers.
 RUN --mount=type=bind,from=gtnh_server_pack,source=/${GTNH_SERVER_FILENAME},target=/tmp/gtnh-server.zip,ro \
     set -eux \
- && ls -lh /tmp/gtnh-server.zip \
  && test -s /tmp/gtnh-server.zip \
- && echo "$GTNH_SERVER_SHA256  /tmp/gtnh-server.zip" | sha256sum -c -
-
-RUN unzip -q /tmp/gtnh-server.zip -d /opt/gtnh \
+ && echo "$GTNH_SERVER_SHA256  /tmp/gtnh-server.zip" | sha256sum -c - \
+ && unzip -q /tmp/gtnh-server.zip -d /opt/gtnh \
+ && echo "=== GTNH files ===" \
  && find /opt/gtnh -maxdepth 3 -type f | sort | head -200
 
 RUN set -eux \
