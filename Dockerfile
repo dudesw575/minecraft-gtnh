@@ -40,8 +40,10 @@ RUN --mount=type=bind,from=gtnh_server_pack,source=/${GTNH_SERVER_FILENAME},targ
  && test -s /tmp/gtnh-server.zip \
  && echo "$GTNH_SERVER_SHA256  /tmp/gtnh-server.zip" | sha256sum -c - \
  && unzip -q /tmp/gtnh-server.zip -d /opt/gtnh \
- && echo "=== GTNH files ===" \
- && find /opt/gtnh -maxdepth 3 -type f | sort | head -200
+ && find /opt/gtnh -type d -exec chmod u+rwx {} \; \
+ && find /opt/gtnh -type f -exec chmod u+rw {} \; \
+ && find /opt/gtnh -type f \( -name '*.sh' -o -name '*.command' \) -exec chmod u+x {} \; \
+ && chown -R app:app /opt/gtnh
 
 RUN set -eux \
  && START_SCRIPT="$(find /opt/gtnh -maxdepth 3 -type f \( -name 'startserver-java9.sh' -o -name 'startserver.sh' \) -print | sort | head -n 1)" \
