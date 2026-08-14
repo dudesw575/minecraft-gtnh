@@ -168,7 +168,7 @@ jobs:
             VCS_REF=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp || github.run_started_at }}
           build-contexts: |
-            gtnh_server_pack=server-pack/${{ needs.discover.outputs.filename }}
+            gtnh_server_pack=server-pack
           cache-from: type=gha,scope=gtnh-${{ needs.discover.outputs.channel }}
           cache-to: type=gha,mode=max,scope=gtnh-${{ needs.discover.outputs.channel }}
           provenance: false
