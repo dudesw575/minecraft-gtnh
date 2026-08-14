@@ -20,19 +20,37 @@ extract_server_url_from_history() {
   python3 -c '
 import html, re, sys
 version, page = sys.argv[1], sys.stdin.read()
-match = re.search(r"<h2[^>]*>\s*" + re.escape(version) + r"\s+[^<]*</h2>(.*?)(?=<h2\b|$)", page, re.I | re.S)
-if not match:
-    raise SystemExit(f"Version {version} was not found on the official GTNH version-history page")
-server = re.search(r"<h3[^>]*>\s*Server ZIPs\s*</h3>(.*?)(?=<h3\b|<h2\b|$)", match.group(1), re.I | re.S)
-if not server:
-    raise SystemExit(f"No Server ZIPs section found for GTNH {version}")
-links = re.findall(r"<a[^>]+href=[\"\x27]([^\"\x27]+)[\"\x27][^>]*>\s*Java\s+17-25\s+ZIP", server.group(1), re.I | re.S)
-if not links:
-    raise SystemExit(f"No Java 17-25 server ZIP found for GTNH {version}")
-url = html.unescape(links[0])
-if not url.startswith("https://downloads.gtnewhorizons.com/ServerPacks/"):
-    raise SystemExit(f"Refusing non-official GTNH server URL: {url}")
-print(url)
+
+# The current GTNH site renders the release type separately from the version
+# heading (for example: <h2>2.8.4</h2> ... Stable release). Do not assume
+# the release type is part of the heading text.
+blocks = re.findall(
+    r"<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\\b|$)",
+    page,
+    re.I | re.S,
+)
+
+for heading, block in blocks:
+    heading = html.unescape(re.sub(r"<[^>]+>", "", heading)).strip()
+    if heading != version:
+        continue
+    server = re.search(r"<h3[^>]*>\s*Server ZIPs\s*</h3>(.*?)(?=<h3\\b|<h2\\b|$)", block, re.I | re.S)
+    if not server:
+        raise SystemExit(f"No Server ZIPs section found for GTNH {version}")
+    links = re.findall(
+        r"<a[^>]+href=[\"\\x27]([^\"\\x27]+)[\"\\x27][^>]*>\\s*Java\\s+17-25\\s+ZIP",
+        server.group(1),
+        re.I | re.S,
+    )
+    if not links:
+        raise SystemExit(f"No Java 17-25 server ZIP found for GTNH {version}")
+    url = html.unescape(links[0])
+    if not url.startswith("https://downloads.gtnewhorizons.com/ServerPacks/"):
+        raise SystemExit(f"Refusing non-official GTNH server URL: {url}")
+    print(url)
+    raise SystemExit
+
+raise SystemExit(f"Version {version} was not found on the official GTNH version-history page")
 ' "$version" <<<"$page"
 }
 
@@ -43,12 +61,26 @@ latest_release_version() {
   python3 -c '
 import html, re, sys
 mode, page = sys.argv[1], sys.stdin.read()
-for heading, _section in re.findall(r"<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\b|$)", page, re.I | re.S):
+
+# Current GTNH version-history markup has the version in <h2> and the
+# release-channel label in the content immediately following that heading.
+blocks = re.findall(
+    r"<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\\b|$)",
+    page,
+    re.I | re.S,
+)
+
+wanted = {"stable": "Stable release", "beta": "Beta release"}[mode]
+for heading, block in blocks:
     heading = html.unescape(re.sub(r"<[^>]+>", "", heading)).strip()
-    if mode == "stable" and re.search(r"\bStable release$", heading, re.I):
-        print(heading.rsplit(None, 2)[0]); raise SystemExit
-    if mode == "beta" and re.search(r"\bBeta release$", heading, re.I):
-        print(heading.rsplit(None, 2)[0]); raise SystemExit
+    if not re.fullmatch(r"\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9.-]+)?", heading):
+        continue
+    text = html.unescape(re.sub(r"<[^>]+>", " ", block))
+    text = re.sub(r"\\s+", " ", text).strip()
+    if wanted.lower() in text.lower():
+        print(heading)
+        raise SystemExit
+
 raise SystemExit(f"No latest {mode} release was found on the official GTNH version-history page")
 ' "$mode" <<<"$page"
 }
