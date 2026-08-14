@@ -1,16 +1,14 @@
-version: '3.2'
-
 services:
-  mine:
-    build: .
+  gtnh:
+    image: dudesw575/mc-gtnh:latest
+    restart: unless-stopped
     ports:
-      - 25565:25565
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"
+      MEMORY: "6G"
     volumes:
-      - ./eula.txt:/minecraft/eula.txt
-      - ./server.properties:/minecraft/server.properties
-      #- ./World:/minecraft/World
-      - ./whitelist.json:/minecraft/whitelist.json
-      - ./startserver.sh:/minecraft/startserver.sh
-    # restart: always
-    tty: true
-    stdin_open: true
+      - gtnh-data:/minecraft
+
+volumes:
+  gtnh-data:
