@@ -171,8 +171,8 @@ jobs:
             gtnh_server_pack=server-pack/${{ needs.discover.outputs.filename }}
           cache-from: type=gha,scope=gtnh-${{ needs.discover.outputs.channel }}
           cache-to: type=gha,mode=max,scope=gtnh-${{ needs.discover.outputs.channel }}
-          provenance: true
-          sbom: true
+          provenance: false
+          sbom: false
 
       - name: Smoke-test server startup
         shell: bash
