@@ -92,19 +92,19 @@ fi
 
 curl -fsSIL --retry 3 --retry-all-errors "$SERVER_URL" >/dev/null
 
-SHA256=""
+EXPECTED_SHA256=""
 for suffix in .sha256 .sha256sum; do
   if checksum="$(curl -fsSL --retry 2 --retry-all-errors "${SERVER_URL}${suffix}" 2>/dev/null)"; then
-    SHA256="$(printf '%s\n' "$checksum" | awk 'match($0, /[0-9a-fA-F]{64}/) {print substr($0, RSTART, RLENGTH); exit}')"
-    if [ -n "$SHA256" ]; then break; fi
+    EXPECTED_SHA256="$(printf '%s\n' "$checksum" | awk 'match($0, /[0-9a-fA-F]{64}/) {print substr($0, RSTART, RLENGTH); exit}')"
+    if [ -n "$EXPECTED_SHA256" ]; then break; fi
   fi
 done
 
-if [ -z "$SHA256" ]; then
-  echo "No checksum sidecar was published beside the official server ZIP; continuing without checksum verification." >&2
+if [ -z "$EXPECTED_SHA256" ]; then
+  echo "No checksum sidecar was published beside the official server ZIP; the workflow will record the downloaded archive SHA-256 but cannot compare it to an upstream checksum." >&2
 fi
 
 printf 'version=%s\n' "$VERSION"
 printf 'server_url=%s\n' "$SERVER_URL"
 printf 'filename=%s\n' "$FILENAME"
-printf 'sha256=%s\n' "$SHA256"
+printf 'expected_sha256=%s\n' "$EXPECTED_SHA256"
