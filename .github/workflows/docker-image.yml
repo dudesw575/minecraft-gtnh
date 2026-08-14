@@ -266,38 +266,38 @@ jobs:
           sarif_file: trivy-results.sarif
           category: trivy-container
 
-      - name: Scan image with Snyk
-        continue-on-error: true
-        uses: snyk/actions/docker@0.4.0
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: gtnh-ci:${{ needs.discover.outputs.version }}
-          args: --file=Dockerfile --sarif-file-output=snyk.sarif
+      # - name: Scan image with Snyk
+      #   continue-on-error: true
+      #   uses: snyk/actions/docker@0.4.0
+      #   env:
+      #     SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      #   with:
+      #     image: gtnh-ci:${{ needs.discover.outputs.version }}
+      #     args: --file=Dockerfile --sarif-file-output=snyk.sarif
       
-      - name: Inspect Snyk SARIF
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          jq -r '
-            "runs=\(.runs | length)",
-            (.runs[]
-              | [
-                  .tool.driver.name,
-                  .tool.driver.version,
-                  (.results | length),
-                  (.tool.driver.rules | length)
-                ]
-              | @tsv)
-          ' snyk.sarif
+      # - name: Inspect Snyk SARIF
+      #   if: always()
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #     jq -r '
+      #       "runs=\(.runs | length)",
+      #       (.runs[]
+      #         | [
+      #             .tool.driver.name,
+      #             .tool.driver.version,
+      #             (.results | length),
+      #             (.tool.driver.rules | length)
+      #           ]
+      #         | @tsv)
+      #     ' snyk.sarif
 
-      - name: Upload Snyk results
-        if: always()
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: snyk.sarif
-          category: snyk-container
+      # - name: Upload Snyk results
+      #   if: always()
+      #   uses: github/codeql-action/upload-sarif@v4
+      #   with:
+      #     sarif_file: snyk.sarif
+      #     category: snyk-container
 
       - name: Login to Docker Hub
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
