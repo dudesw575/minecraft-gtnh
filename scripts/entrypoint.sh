@@ -74,8 +74,6 @@ START_CMD="$(tr '\n' ' ' < "$START_SCRIPT" | sed 's/\\\\//g')"
 JAR="$(printf '%s\n' "$START_CMD" | sed -n 's/.*-jar[[:space:]]\+\([^[:space:]]*\.jar\).*/\1/p' | tail -n 1)"
 
 if [ -z "$JAR" ]; then
-  # Fallback for an upstream launcher format that does not put the jar after
-  # a literal -jar token. Still require a server-specific jar name.
   JAR="$(find "$IMAGE_SERVER_DIR" -maxdepth 2 -type f \( -name '*forgePatches.jar' -o -name 'forge-*.jar' \) ! -name '*sources*' ! -name '*javadoc*' -print | sort | head -n 1)"
 fi
 
@@ -86,7 +84,7 @@ fi
 
 # Preserve the official pack's Java arguments while replacing its hard-coded
 # heap settings with the runtime MEMORY value.
-JAVA_ARGS="$(printf '%s\n' "$START_CMD" | sed -n 's/.*[[:space:]]java[[:space:]]\+\(.*\)[[:space:]]-jar[[:space:]].*/\1/p' | sed -E 's/-Xms[0-9]+[KMGkmgTt][[:space:]]*//g; s/-Xmx[0-9]+[KMGkmgTt][[:space:]]*//g')"
+JAVA_ARGS="$(printf '%s\n' "$START_CMD" | sed -n 's/.*java[[:space:]]\+\(.*\)[[:space:]]-jar[[:space:]].*/\1/p' | sed -E 's/-Xms[0-9]+[KMGkmgTt][[:space:]]*//g; s/-Xmx[0-9]+[KMGkmgTt][[:space:]]*//g')"
 
 if [ -z "$JAVA_ARGS" ] && [ -f java9args.txt ]; then
   JAVA_ARGS='-Dfml.readTimeout=180 @java9args.txt'
