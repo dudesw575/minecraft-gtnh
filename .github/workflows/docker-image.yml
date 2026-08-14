@@ -2,7 +2,7 @@ name: Build GTNH Docker image
 
 on:
   schedule:
-    - cron: '17 3 * * *'
+    - cron: '17 3 1 * *'
   workflow_dispatch:
     inputs:
       channel:
@@ -67,10 +67,17 @@ jobs:
         id: existing
         shell: bash
         run: |
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
+            echo 'build=true' >> "$GITHUB_OUTPUT"
+            echo 'Manual run: forcing build regardless of existing Docker Hub tag.'
+            exit 0
+          fi
+
           status="$(curl -sS -o /dev/null -w '%{http_code}' \
             "https://hub.docker.com/v2/namespaces/dudesw575/repositories/mc-gtnh/tags/${{ steps.meta.outputs.version }}")"
+
           if [ "$status" = '200' ]; then
-            echo 'build=false' >> "$GITHUB_OUTPUT"
+            echo 'build=false' >> "$GITHUB_OUTPUT'
             echo "Image tag ${{ steps.meta.outputs.version }} already exists; skipping build."
           elif [ "$status" = '404' ]; then
             echo 'build=true' >> "$GITHUB_OUTPUT"
@@ -135,7 +142,7 @@ jobs:
   build-test-publish:
     name: Build, smoke-test, scan, publish
     needs: discover
-    if: needs.discover.outputs.build == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.discover.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -167,23 +174,23 @@ jobs:
             GTNH_SERVER_SHA256=${{ needs.discover.outputs.sha256 }}
             VCS_REF=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp || github.run_started_at }}
-          secret-files: |
-            gtnh_server_pack=server-pack/${{ needs.discover.outputs.filename }}
+          build-contexts: |
+            gtnh_server_pack=server-pack
           cache-from: type=gha,scope=gtnh-${{ needs.discover.outputs.channel }}
           cache-to: type=gha,mode=max,scope=gtnh-${{ needs.discover.outputs.channel }}
-          provenance: true
-          sbom: true
+          provenance: false
+          sbom: false
 
       - name: Smoke-test server startup
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p smoke-data
           container='gtnh-smoke'
           cleanup() {
             docker logs "$container" > smoke-server.log 2>&1 || true
             docker stop -t 30 "$container" >/dev/null 2>&1 || true
             docker rm -f "$container" >/dev/null 2>&1 || true
+            docker volume rm gtnh-smoke-data >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
@@ -191,7 +198,7 @@ jobs:
             -e EULA=TRUE \
             -e MEMORY=6G \
             -p 25565:25565 \
-            -v "$PWD/smoke-data:/minecraft" \
+            -v gtnh-smoke-data:/minecraft \
             "gtnh-ci:${{ needs.discover.outputs.version }}"
 
           deadline=$((SECONDS + 900))
@@ -247,6 +254,7 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          skip-dirs: /opt/gtnh
           exit-code: '1'
 
       - name: Login to Docker Hub

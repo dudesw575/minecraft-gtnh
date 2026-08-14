@@ -3,108 +3,118 @@ set -euo pipefail
 
 CHANNEL="${1:-stable}"
 REQUESTED_VERSION="${2:-}"
-JAVA_LINE="17-25"
+DOWNLOADS_URL="https://www.gtnewhorizons.com/downloads/"
 VERSION_HISTORY_URL="https://www.gtnewhorizons.com/version-history/"
-GITHUB_RELEASES_URL="https://api.github.com/repos/GTNewHorizons/GT-New-Horizons-Modpack/releases?per_page=100"
 DOWNLOAD_BASE="https://downloads.gtnewhorizons.com/ServerPacks/"
 
-case "$CHANNEL" in
-  stable|beta|nightly) ;;
-  *) echo "Unsupported channel: $CHANNEL" >&2; exit 2 ;;
-esac
+case "$CHANNEL" in stable|beta|nightly) ;; *) echo "Unsupported channel: $CHANNEL" >&2; exit 2;; esac
 
-extract_server_url_from_history() {
-  local version="$1"
-  local page
-  page="$(curl -fsSL --retry 3 --retry-all-errors "$VERSION_HISTORY_URL")"
+# Extract links from the official GTNH page using an HTML parser. We keep the
+# href attached to the visible link text so we never reconstruct a server-pack
+# filename ourselves.
+parse_links() {
   python3 -c '
-import html, re, sys
-version, page = sys.argv[1], sys.stdin.read()
-match = re.search(r"<h2[^>]*>\s*" + re.escape(version) + r"\s+[^<]*</h2>(.*?)(?=<h2\b|$)", page, re.I | re.S)
-if not match:
-    raise SystemExit(f"Version {version} was not found on the official GTNH version-history page")
-server = re.search(r"<h3[^>]*>\s*Server ZIPs\s*</h3>(.*?)(?=<h3\b|<h2\b|$)", match.group(1), re.I | re.S)
-if not server:
-    raise SystemExit(f"No Server ZIPs section found for GTNH {version}")
-links = re.findall(r"<a[^>]+href=[\"\x27]([^\"\x27]+)[\"\x27][^>]*>\s*Java\s+17-25\s+ZIP", server.group(1), re.I | re.S)
-if not links:
-    raise SystemExit(f"No Java 17-25 server ZIP found for GTNH {version}")
-url = html.unescape(links[0])
-if not url.startswith("https://downloads.gtnewhorizons.com/ServerPacks/"):
-    raise SystemExit(f"Refusing non-official GTNH server URL: {url}")
-print(url)
-' "$version" <<<"$page"
+from html.parser import HTMLParser
+import json, sys
+class P(HTMLParser):
+    def __init__(self): super().__init__(); self.a=None; self.links=[]
+    def handle_starttag(self, tag, attrs):
+        if tag=="a": self.a=[dict(attrs).get("href"), []]
+    def handle_data(self, data):
+        if self.a: self.a[1].append(data)
+    def handle_endtag(self, tag):
+        if tag=="a" and self.a:
+            self.links.append({"href":self.a[0],"text":" ".join("".join(self.a[1]).split())})
+            self.a=None
+p=P(); p.feed(sys.stdin.read()); print(json.dumps(p.links))
+' <<<"$1"
 }
 
-latest_release_version() {
-  local mode="$1"
-  local page
-  page="$(curl -fsSL --retry 3 --retry-all-errors "$VERSION_HISTORY_URL")"
+select_server_link() {
+  local html="$1" version="$2" mode="$3"
   python3 -c '
-import html, re, sys
-mode, page = sys.argv[1], sys.stdin.read()
-for heading, _section in re.findall(r"<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\b|$)", page, re.I | re.S):
-    heading = html.unescape(re.sub(r"<[^>]+>", "", heading)).strip()
-    if mode == "stable" and re.search(r"\bStable release$", heading, re.I):
-        print(heading.rsplit(None, 2)[0]); raise SystemExit
-    if mode == "beta" and re.search(r"\bBeta release$", heading, re.I):
-        print(heading.rsplit(None, 2)[0]); raise SystemExit
-raise SystemExit(f"No latest {mode} release was found on the official GTNH version-history page")
-' "$mode" <<<"$page"
+import json, sys, re
+links=json.loads(sys.stdin.read()); version,mode=sys.argv[1:]
+
+def official(h): return h and h.startswith("https://downloads.gtnewhorizons.com/ServerPacks/")
+
+if mode == "version":
+    for i,l in enumerate(links):
+        if l["text"].lower() == "java 17-25 zip" and official(l["href"]):
+            if version in l["href"]:
+                print(l["href"]); raise SystemExit
+    raise SystemExit("No official Java 17-25 Server ZIP found for GTNH {}".format(version))
+
+needle = "Latest ({}) for Java 17-25".format(version)
+for l in links:
+    if l["text"] == needle and official(l["href"]): print(l["href"]); raise SystemExit
+raise SystemExit("No official Server ZIP link found for {}".format(needle))
+' <<<"$(parse_links "$html")" "$version" "$mode"
 }
 
-latest_nightly() {
-  local json
-  json="$(curl -fsSL --retry 3 --retry-all-errors -H 'Accept: application/vnd.github+json' "$GITHUB_RELEASES_URL")"
-  python3 -c '
-import json, re, sys
-releases = json.load(sys.stdin)
-nightlies = [r for r in releases if not r.get("draft") and re.fullmatch(r"2\.\d+\.\d+-nightly-\d{4}-\d{2}-\d{2}(?:-\d+)?", r.get("tag_name", ""))]
-if not nightlies:
-    raise SystemExit("No GTNH nightly release was found in the official GTNH Modpack GitHub releases")
-nightlies.sort(key=lambda r: r.get("published_at") or "", reverse=True)
-print(nightlies[0]["tag_name"])
-' <<<"$json"
-}
+DOWNLOADS="$(curl -fsSL --retry 3 --retry-all-errors "$DOWNLOADS_URL")"
+HISTORY="$(curl -fsSL --retry 3 --retry-all-errors "$VERSION_HISTORY_URL")"
 
 if [ -n "$REQUESTED_VERSION" ]; then
   VERSION="$REQUESTED_VERSION"
-else
-  case "$CHANNEL" in
-    stable) VERSION="$(latest_release_version stable)" ;;
-    beta) VERSION="$(latest_release_version beta)" ;;
-    nightly) VERSION="$(latest_nightly)" ;;
-  esac
+elif [ "$CHANNEL" = stable ]; then
+  VERSION="$(python3 -c '
+from html.parser import HTMLParser
+import re,sys
+class P(HTMLParser):
+ def __init__(self): super().__init__(); self.a=None; self.links=[]
+ def handle_starttag(self,t,a):
+  if t=="a": self.a=[dict(a).get("href"),[]]
+ def handle_data(self,d):
+  if self.a:self.a[1].append(d)
+ def handle_endtag(self,t):
+  if t=="a" and self.a:self.links.append((" ".join("".join(self.a[1]).split()),self.a[0]));self.a=None
+p=P();p.feed(sys.stdin.read())
+for text,href in p.links:
+ m=re.fullmatch(r"Latest \(([^)]+)\) for Java 17-25",text)
+ if m and href and "/ServerPacks/" in href: print(m.group(1));break
+else: raise SystemExit("No latest stable Server ZIP was found on the official GTNH downloads page")
+' <<<"$DOWNLOADS")"
+elif [ "$CHANNEL" = beta ]; then
+  VERSION="$(python3 -c '
+from html.parser import HTMLParser
+import re,sys
+class P(HTMLParser):
+ def __init__(self):super().__init__();self.text="";self.in_h2=False;self.rels=[]
+ def handle_starttag(self,t,a):
+  if t=="h2":self.in_h2=True;self.text=""
+ def handle_data(self,d):
+  if self.in_h2:self.text+=d
+ def handle_endtag(self,t):
+  if t=="h2":
+   x=" ".join(self.text.split());m=re.match(r"(.+?) Beta release$",x)
+   if m:self.rels.append(m.group(1));self.in_h2=False
+for _ in [0]:
+ p=P();p.feed(sys.stdin.read())
+ if p.rels: print(p.rels[0])
+ else: raise SystemExit("No beta release found on official GTNH version-history page")
+' <<<"$HISTORY")"
+elif [ "$CHANNEL" = nightly ]; then
+  echo "Nightly discovery is not yet mapped to an official GTNH Server ZIP; refusing to guess a filename." >&2
+  exit 1
 fi
 
-if [[ "$VERSION" == *-nightly-* ]]; then
-  [[ "$CHANNEL" == nightly ]] || { echo "Nightly version requires channel=nightly" >&2; exit 2; }
-  FILENAME="GT_New_Horizons_${VERSION}_Server_Java_${JAVA_LINE}.zip"
-  SERVER_URL="${DOWNLOAD_BASE}${FILENAME}"
+if [ -n "$REQUESTED_VERSION" ]; then
+  # Explicit versions are always resolved against the official version history.
+  SERVER_URL="$(select_server_link "$HISTORY" "$VERSION" version)"
+elif [ "$CHANNEL" = stable ]; then
+  SERVER_URL="$(select_server_link "$DOWNLOADS" "$VERSION" latest)"
 else
-  case "$CHANNEL" in
-    stable|beta) ;;
-    nightly) echo "Requested non-nightly version '$VERSION' is incompatible with channel=nightly" >&2; exit 2 ;;
-  esac
-  SERVER_URL="$(extract_server_url_from_history "$VERSION")"
-  FILENAME="${SERVER_URL##*/}"
+  SERVER_URL="$(select_server_link "$HISTORY" "$VERSION" version)"
 fi
 
 curl -fsSIL --retry 3 --retry-all-errors "$SERVER_URL" >/dev/null
-
+FILENAME="${SERVER_URL##*/}"
 EXPECTED_SHA256=""
 for suffix in .sha256 .sha256sum; do
-  if checksum="$(curl -fsSL --retry 2 --retry-all-errors "${SERVER_URL}${suffix}" 2>/dev/null)"; then
-    EXPECTED_SHA256="$(printf '%s\n' "$checksum" | awk 'match($0, /[0-9a-fA-F]{64}/) {print substr($0, RSTART, RLENGTH); exit}')"
-    if [ -n "$EXPECTED_SHA256" ]; then break; fi
-  fi
+ if checksum="$(curl -fsSL --retry 2 --retry-all-errors "${SERVER_URL}${suffix}" 2>/dev/null)"; then
+  EXPECTED_SHA256="$(printf '%s\n' "$checksum" | awk 'match($0, /[0-9a-fA-F]{64}/){print substr($0,RSTART,RLENGTH);exit}')"; [ -n "$EXPECTED_SHA256" ] && break
+ fi
 done
-
-if [ -z "$EXPECTED_SHA256" ]; then
-  echo "No checksum sidecar was published beside the official server ZIP; the workflow will record the downloaded archive SHA-256 but cannot compare it to an upstream checksum." >&2
-fi
-
-printf 'version=%s\n' "$VERSION"
-printf 'server_url=%s\n' "$SERVER_URL"
-printf 'filename=%s\n' "$FILENAME"
-printf 'expected_sha256=%s\n' "$EXPECTED_SHA256"
+[ -n "$EXPECTED_SHA256" ] || echo "No upstream checksum sidecar found; recording archive SHA-256 after download." >&2
+printf 'version=%s\nchannel=%s\nserver_url=%s\nfilename=%s\nexpected_sha256=%s\n' "$VERSION" "$CHANNEL" "$SERVER_URL" "$FILENAME" "$EXPECTED_SHA256"
