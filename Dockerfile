@@ -20,7 +20,8 @@ LABEL org.opencontainers.image.title="GT New Horizons Minecraft Server" \
       org.gtnh.server-pack-sha256="$GTNH_SERVER_SHA256" \
       org.gtnh.server-pack-url="$GTNH_SERVER_URL"
 
-RUN apk add --no-cache ca-certificates unzip \
+RUN apk upgrade --no-cache \
+ && apk add --no-cache ca-certificates unzip \
  && addgroup -S app \
  && adduser -S app -G app
 
