@@ -67,10 +67,17 @@ jobs:
         id: existing
         shell: bash
         run: |
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
+            echo 'build=true' >> "$GITHUB_OUTPUT"
+            echo 'Manual run: forcing build regardless of existing Docker Hub tag.'
+            exit 0
+          fi
+
           status="$(curl -sS -o /dev/null -w '%{http_code}' \
             "https://hub.docker.com/v2/namespaces/dudesw575/repositories/mc-gtnh/tags/${{ steps.meta.outputs.version }}")"
+
           if [ "$status" = '200' ]; then
-            echo 'build=false' >> "$GITHUB_OUTPUT"
+            echo 'build=false' >> "$GITHUB_OUTPUT'
             echo "Image tag ${{ steps.meta.outputs.version }} already exists; skipping build."
           elif [ "$status" = '404' ]; then
             echo 'build=true' >> "$GITHUB_OUTPUT"
@@ -135,7 +142,7 @@ jobs:
   build-test-publish:
     name: Build, smoke-test, scan, publish
     needs: discover
-    if: needs.discover.outputs.build == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.discover.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
