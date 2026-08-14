@@ -2,22 +2,24 @@
 set -eu
 
 MEMORY="${MEMORY:-6G}"
-SERVER_DIR="${SERVER_DIR:-/minecraft/server}"
+IMAGE_SERVER_DIR="/opt/gtnh"
+SERVER_DIR="/minecraft"
 
 case "$MEMORY" in
   *[!0-9MmGgKkTt]*) echo "MEMORY must be a Java heap size such as 6G or 12288M" >&2; exit 2 ;;
 esac
 
-if [ ! -d "$SERVER_DIR" ]; then
-  echo "Server directory not found: $SERVER_DIR" >&2
-  exit 1
+if [ ! -f "$SERVER_DIR/.gtnh-image-initialized" ]; then
+  echo "Initializing GTNH runtime volume from immutable image payload..."
+  cp -a "$IMAGE_SERVER_DIR/." "$SERVER_DIR/"
+  touch "$SERVER_DIR/.gtnh-image-initialized"
 fi
 
 cd "$SERVER_DIR"
 
 JAR="${FORGE_JAR:-}"
 if [ -z "$JAR" ]; then
-  JAR="$(find . -maxdepth 1 -type f -name 'forge-*.jar' ! -name '*sources*' ! -name '*javadoc*' -print | sort | head -n 1)"
+  JAR="$(find . -maxdepth 3 -type f -name 'forge-*.jar' ! -name '*sources*' ! -name '*javadoc*' -print | sort | head -n 1)"
 fi
 
 if [ -z "$JAR" ]; then
