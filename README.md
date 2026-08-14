@@ -8,7 +8,7 @@ Version-aware Docker images for the [GT New Horizons](https://www.gtnewhorizons.
 
 This repository builds `dudesw575/mc-gtnh` from the **official GTNH SERVER distribution**. It does not use the GTNH source/modpack repository archive as the server payload.
 
-The current GTNH distribution exposes Java 17-25 server ZIPs from the official downloads site and version history. At the time this automation was implemented, the current stable release was 2.8.4 and the current beta release was 2.9.0-beta-2. GTNH's official GitHub releases also publish nightly versions; the pipeline uses those releases to discover the nightly version and then validates the corresponding official ServerPacks URL before downloading it.
+The current GTNH distribution exposes Java 17-25 server ZIPs from the official downloads site and version history. At the time this automation was implemented, the current stable release was 2.8.4
 
 The workflow fails rather than falling back to a mirror or GitHub source archive if the expected official server ZIP is unavailable.
 
@@ -17,8 +17,6 @@ The workflow fails rather than falling back to a mirror or GitHub source archive
 | Channel | Discovery | Moving tags |
 |---|---|---|
 | `stable` | Latest stable release from GTNH version history | `latest`, `major.minor` |
-| `beta` | Latest beta release from GTNH version history | `beta`, `major.minor` |
-| `nightly` | Latest official GTNH nightly GitHub release | `nightly`, `major.minor-nightly` |
 
 Every successful build also gets an immutable full-version tag.
 
@@ -29,14 +27,6 @@ dudesw575/mc-gtnh:2.8.4
 dudesw575/mc-gtnh:2.8
 dudesw575/mc-gtnh:latest
 ```
-
-```text
-dudesw575/mc-gtnh:2.9.0-beta-2
-dudesw575/mc-gtnh:2.9
-dudesw575/mc-gtnh:beta
-```
-
-Nightlies use the complete date/version identifier, plus the separate `nightly` moving tag. Nightly and beta builds never update `latest`.
 
 ## Runtime
 
