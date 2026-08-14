@@ -27,28 +27,24 @@ WORKDIR /minecraft
 
 COPY --chown=app:app scripts/entrypoint.sh /usr/local/bin/gtnh-entrypoint
 RUN chmod 0755 /usr/local/bin/gtnh-entrypoint \
- && mkdir -p /minecraft/server /minecraft/data \
- && chown -R app:app /minecraft
+ && mkdir -p /opt/gtnh /minecraft \
+ && chown -R app:app /opt/gtnh /minecraft
 
 USER app
 
-ENV MEMORY=6G \
-    SERVER_DIR=/minecraft/data
+ENV MEMORY=6G
 
-VOLUME ["/minecraft/data"]
+VOLUME ["/minecraft"]
 EXPOSE 25565/tcp
 
-# The server archive is supplied by the workflow as a BuildKit secret so the
-# Dockerfile itself never needs a hard-coded release or Forge filename.
 RUN --mount=type=secret,id=gtnh_server_pack,target=/tmp/gtnh-server.zip \
     test -s /tmp/gtnh-server.zip \
  && if [ -n "$GTNH_SERVER_SHA256" ]; then \
       echo "$GTNH_SERVER_SHA256  /tmp/gtnh-server.zip" | sha256sum -c -; \
     fi \
- && unzip -q /tmp/gtnh-server.zip -d /minecraft/server \
+ && unzip -q /tmp/gtnh-server.zip -d /opt/gtnh \
  && rm -f /tmp/gtnh-server.zip \
- && test -n "$(find /minecraft/server -maxdepth 3 -type f -name 'forge-*.jar' ! -name '*sources*' ! -name '*javadoc*' -print -quit)" \
- && test -f /minecraft/server/eula.txt || printf 'eula=false\n' > /minecraft/server/eula.txt \
- && chown -R app:app /minecraft/server
+ && test -n "$(find /opt/gtnh -maxdepth 3 -type f -name 'forge-*.jar' ! -name '*sources*' ! -name '*javadoc*' -print -quit)" \
+ && chown -R app:app /opt/gtnh
 
 ENTRYPOINT ["/usr/local/bin/gtnh-entrypoint"]
