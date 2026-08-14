@@ -38,6 +38,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       server_url: ${{ steps.meta.outputs.server_url }}
       filename: ${{ steps.meta.outputs.filename }}
+      expected_sha256: ${{ steps.meta.outputs.expected_sha256 }}
       sha256: ${{ steps.download.outputs.sha256 }}
       build: ${{ steps.existing.outputs.build }}
       tags: ${{ steps.tags.outputs.tags }}
@@ -87,12 +88,17 @@ jobs:
             -o '${{ steps.meta.outputs.filename }}'
           test -s '${{ steps.meta.outputs.filename }}'
 
-      - name: Calculate server-pack checksum
+      - name: Verify server-pack checksum
         if: steps.existing.outputs.build == 'true'
         id: download
         shell: bash
         run: |
           actual="$(sha256sum '${{ steps.meta.outputs.filename }}' | awk '{print $1}')"
+          expected='${{ steps.meta.outputs.expected_sha256 }}'
+          if [ -n "$expected" ] && [ "$actual" != "$expected" ]; then
+            echo "GTNH upstream checksum mismatch: expected $expected, got $actual" >&2
+            exit 1
+          fi
           echo "sha256=$actual" >> "$GITHUB_OUTPUT"
           echo "Server-pack archive SHA-256: $actual"
 
@@ -119,7 +125,7 @@ jobs:
 
       - name: Upload server pack for build job
         if: steps.existing.outputs.build == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gtnh-server-pack-${{ steps.meta.outputs.version }}
           path: ${{ steps.meta.outputs.filename }}
@@ -136,7 +142,7 @@ jobs:
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
       - name: Download server pack artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: gtnh-server-pack-${{ needs.discover.outputs.version }}
           path: server-pack
@@ -220,7 +226,7 @@ jobs:
 
       - name: Upload smoke-test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: gtnh-smoke-logs-${{ needs.discover.outputs.version }}
           path: smoke-server.log
