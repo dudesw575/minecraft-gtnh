@@ -178,12 +178,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p smoke-data
           container='gtnh-smoke'
           cleanup() {
             docker logs "$container" > smoke-server.log 2>&1 || true
             docker stop -t 30 "$container" >/dev/null 2>&1 || true
             docker rm -f "$container" >/dev/null 2>&1 || true
+            docker volume rm gtnh-smoke-data >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
@@ -191,7 +191,7 @@ jobs:
             -e EULA=TRUE \
             -e MEMORY=6G \
             -p 25565:25565 \
-            -v "$PWD/smoke-data:/minecraft" \
+            -v gtnh-smoke-data::/minecraft \
             "gtnh-ci:${{ needs.discover.outputs.version }}"
 
           deadline=$((SECONDS + 900))
