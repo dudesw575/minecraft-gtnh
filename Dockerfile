@@ -24,8 +24,8 @@ RUN apk add --no-cache ca-certificates unzip \
  && addgroup -S app \
  && adduser -S app -G app
 
-COPY --from=server-pack /${GTNH_SERVER_FILENAME} /tmp/server-pack.zip
 COPY --chown=app:app scripts/entrypoint.sh /usr/local/bin/gtnh-entrypoint
+
 RUN chmod 0755 /usr/local/bin/gtnh-entrypoint \
  && mkdir -p /opt/gtnh /minecraft \
  && chown -R app:app /opt/gtnh /minecraft
@@ -35,7 +35,7 @@ EXPOSE 25565/tcp
 
 # The workflow downloads the official GTNH server ZIP. BuildKit keeps the
 # archive out of the image history and final image layers.
-RUN --mount=type=secret,id=gtnh_server_pack,target=/tmp/gtnh-server.zip \
+RUN --mount=type=bind,from=gtnh_server_pack,source=/${GTNH_SERVER_FILENAME},target=/tmp/gtnh-server.zip,ro \
     test -s /tmp/gtnh-server.zip \
  && echo "$GTNH_SERVER_SHA256  /tmp/gtnh-server.zip" | sha256sum -c - \
  && unzip -q /tmp/gtnh-server.zip -d /opt/gtnh \
