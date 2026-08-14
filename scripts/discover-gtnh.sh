@@ -20,13 +20,13 @@ extract_server_url_from_history() {
   python3 -c '
 import html, re, sys
 version, page = sys.argv[1], sys.stdin.read()
-match = re.search(r"<h2[^>]*>\\s*" + re.escape(version) + r"\\s+[^<]*</h2>(.*?)(?=<h2\\b|$)", page, re.I | re.S)
+match = re.search(r"<h2[^>]*>\s*" + re.escape(version) + r"\s+[^<]*</h2>(.*?)(?=<h2\b|$)", page, re.I | re.S)
 if not match:
     raise SystemExit(f"Version {version} was not found on the official GTNH version-history page")
-server = re.search(r"<h3[^>]*>\\s*Server ZIPs\\s*</h3>(.*?)(?=<h3\\b|<h2\\b|$)", match.group(1), re.I | re.S)
+server = re.search(r"<h3[^>]*>\s*Server ZIPs\s*</h3>(.*?)(?=<h3\b|<h2\b|$)", match.group(1), re.I | re.S)
 if not server:
     raise SystemExit(f"No Server ZIPs section found for GTNH {version}")
-links = re.findall(r"<a[^>]+href=[\\\"\\\']([^\\\"\\\']+)[\\\"\\\'][^>]*>\\s*Java\\s+17-25\\s+ZIP", server.group(1), re.I | re.S)
+links = re.findall(r"<a[^>]+href=[\"\x27]([^\"\x27]+)[\"\x27][^>]*>\s*Java\s+17-25\s+ZIP", server.group(1), re.I | re.S)
 if not links:
     raise SystemExit(f"No Java 17-25 server ZIP found for GTNH {version}")
 url = html.unescape(links[0])
@@ -43,11 +43,11 @@ latest_release_version() {
   python3 -c '
 import html, re, sys
 mode, page = sys.argv[1], sys.stdin.read()
-for heading, _section in re.findall(r"<h2[^>]*>\\s*([^<]+?)\\s*</h2>(.*?)(?=<h2\\b|$)", page, re.I | re.S):
+for heading, _section in re.findall(r"<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\b|$)", page, re.I | re.S):
     heading = html.unescape(re.sub(r"<[^>]+>", "", heading)).strip()
-    if mode == "stable" and re.search(r"\\bStable release$", heading, re.I):
+    if mode == "stable" and re.search(r"\bStable release$", heading, re.I):
         print(heading.rsplit(None, 2)[0]); raise SystemExit
-    if mode == "beta" and re.search(r"\\bBeta release$", heading, re.I):
+    if mode == "beta" and re.search(r"\bBeta release$", heading, re.I):
         print(heading.rsplit(None, 2)[0]); raise SystemExit
 raise SystemExit(f"No latest {mode} release was found on the official GTNH version-history page")
 ' "$mode" <<<"$page"
@@ -59,7 +59,7 @@ latest_nightly() {
   python3 -c '
 import json, re, sys
 releases = json.load(sys.stdin)
-nightlies = [r for r in releases if not r.get("draft") and re.fullmatch(r"2\\.\\d+\\.\\d+-nightly-\\d{4}-\\d{2}-\\d{2}(?:-\\d+)?", r.get("tag_name", ""))]
+nightlies = [r for r in releases if not r.get("draft") and re.fullmatch(r"2\.\d+\.\d+-nightly-\d{4}-\d{2}-\d{2}(?:-\d+)?", r.get("tag_name", ""))]
 if not nightlies:
     raise SystemExit("No GTNH nightly release was found in the official GTNH Modpack GitHub releases")
 nightlies.sort(key=lambda r: r.get("published_at") or "", reverse=True)
