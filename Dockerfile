@@ -24,8 +24,6 @@ RUN apk add --no-cache ca-certificates unzip \
  && addgroup -S app \
  && adduser -S app -G app
 
-WORKDIR /minecraft
-
 COPY --chown=app:app scripts/entrypoint.sh /usr/local/bin/gtnh-entrypoint
 RUN chmod 0755 /usr/local/bin/gtnh-entrypoint \
  && mkdir -p /opt/gtnh /minecraft \
@@ -34,16 +32,19 @@ RUN chmod 0755 /usr/local/bin/gtnh-entrypoint \
 VOLUME ["/minecraft"]
 EXPOSE 25565/tcp
 
-# The workflow downloads and verifies the official GTNH server ZIP. BuildKit
-# keeps the archive out of the image history and final image layers.
+# The workflow downloads the official GTNH server ZIP. BuildKit keeps the
+# archive out of the image history and final image layers.
 RUN --mount=type=secret,id=gtnh_server_pack,target=/tmp/gtnh-server.zip \
     test -s /tmp/gtnh-server.zip \
- && if [ -n "$GTNH_SERVER_SHA256" ]; then \
-      echo "$GTNH_SERVER_SHA256  /tmp/gtnh-server.zip" | sha256sum -c -; \
-    fi \
+ && echo "$GTNH_SERVER_SHA256  /tmp/gtnh-server.zip" | sha256sum -c - \
  && unzip -q /tmp/gtnh-server.zip -d /opt/gtnh \
  && rm -f /tmp/gtnh-server.zip \
- && test -n "$(find /opt/gtnh -maxdepth 4 -type f -name 'forge-*.jar' ! -name '*sources*' ! -name '*javadoc*' -print -quit)" \
+ && START_SCRIPT="$(find /opt/gtnh -maxdepth 2 -type f \( -name 'startserver-java9.sh' -o -name 'startserver.sh' \) -print | sort | head -n 1)" \
+ && test -n "$START_SCRIPT" \
+ && START_CMD="$(tr '\\n' ' ' < "$START_SCRIPT" | sed 's/\\\\//g')" \
+ && SERVER_JAR="$(printf '%s\\n' "$START_CMD" | sed -n 's/.*-jar[[:space:]]\\+\\([^[:space:]]*\\.jar\\).*/\\1/p' | tail -n 1)" \
+ && test -n "$SERVER_JAR" \
+ && test -f "/opt/gtnh/${SERVER_JAR#./}" \
  && test -n "$(find /opt/gtnh -maxdepth 4 -type f -name 'server.properties' -print -quit)" \
  && test -n "$(find /opt/gtnh -maxdepth 4 -type f -name 'eula.txt' -print -quit)" \
  && chown -R app:app /opt/gtnh
