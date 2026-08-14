@@ -268,7 +268,7 @@ jobs:
 
       - name: Scan image with Snyk
         continue-on-error: true
-        uses: snyk/actions/docker@<pinned-version>
+        uses: snyk/actions/docker@0.4.0
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
