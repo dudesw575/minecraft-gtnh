@@ -261,7 +261,7 @@ jobs:
 
       - name: Upload Trivy results to GitHub Code Scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@4
         with:
           sarif_file: trivy-results.sarif
           category: trivy-container
@@ -273,7 +273,24 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           image: gtnh-ci:${{ needs.discover.outputs.version }}
-          args: --file=Dockerfile
+          args: --file=Dockerfile --sarif-file-output=snyk.sarif
+      
+      - name: Inspect Snyk SARIF
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -r '
+            "runs=\(.runs | length)",
+            (.runs[]
+              | [
+                  .tool.driver.name,
+                  .tool.driver.version,
+                  (.results | length),
+                  (.tool.driver.rules | length)
+                ]
+              | @tsv)
+          ' snyk.sarif
 
       - name: Upload Snyk results
         if: always()
