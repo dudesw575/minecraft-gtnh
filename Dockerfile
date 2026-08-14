@@ -36,28 +36,27 @@ EXPOSE 25565/tcp
 # The workflow downloads the official GTNH server ZIP. BuildKit keeps the
 # archive out of the image history and final image layers.
 RUN --mount=type=bind,from=gtnh_server_pack,source=/${GTNH_SERVER_FILENAME},target=/tmp/gtnh-server.zip,ro \
-    test -s /tmp/gtnh-server.zip \
- && echo "$GTNH_SERVER_SHA256  /tmp/gtnh-server.zip" | sha256sum -c - \
- && unzip -q /tmp/gtnh-server.zip -d /opt/gtnh \
- && rm -f /tmp/gtnh-server.zip \
- && START_SCRIPT="$(find /opt/gtnh -maxdepth 2 -type f \( -name 'startserver-java9.sh' -o -name 'startserver.sh' \) -print | sort | head -n 1)" \
- && test -n "$START_SCRIPT" \
- && if [ "$(dirname "$START_SCRIPT")" != /opt/gtnh ]; then \
-      ROOT="$(dirname "$START_SCRIPT")"; \
-      COUNT="$(find /opt/gtnh -mindepth 1 -maxdepth 1 -type d | wc -l)"; \
-      [ "$COUNT" -eq 1 ] || { echo "Unsupported GTNH server ZIP layout: multiple top-level directories" >&2; exit 1; }; \
-      cp -a "$ROOT/." /opt/gtnh/; \
-      rm -rf "$ROOT"; \
-    fi \
- && START_SCRIPT="$(find /opt/gtnh -maxdepth 1 -type f \( -name 'startserver-java9.sh' -o -name 'startserver.sh' \) -print | sort | head -n 1)" \
- && test -n "$START_SCRIPT" \
- && START_CMD="$(tr '\\n' ' ' < "$START_SCRIPT" | sed 's/\\\\//g')" \
- && SERVER_JAR="$(printf '%s\\n' "$START_CMD" | sed -n 's/.*-jar[[:space:]]\\+\\([^[:space:]]*\\.jar\\).*/\\1/p' | tail -n 1)" \
- && test -n "$SERVER_JAR" \
- && test -f "/opt/gtnh/${SERVER_JAR#./}" \
- && test -n "$(find /opt/gtnh -maxdepth 4 -type f -name 'server.properties' -print -quit)" \
- && test -n "$(find /opt/gtnh -maxdepth 4 -type f -name 'eula.txt' -print -quit)" \
- && chown -R app:app /opt/gtnh
+    set -eux \
+ && ls -lh /tmp/gtnh-server.zip \
+ && test -s /tmp/gtnh-server.zip \
+ && echo "$GTNH_SERVER_SHA256  /tmp/gtnh-server.zip" | sha256sum -c -
+
+RUN unzip -q /tmp/gtnh-server.zip -d /opt/gtnh \
+ && find /opt/gtnh -maxdepth 3 -type f | sort | head -200
+
+RUN set -eux \
+ && START_SCRIPT="$(find /opt/gtnh -maxdepth 3 -type f \( -name 'startserver-java9.sh' -o -name 'startserver.sh' \) -print | sort | head -n 1)" \
+ && echo "START_SCRIPT=$START_SCRIPT" \
+ && test -n "$START_SCRIPT"
+
+RUN set -eux \
+ && find /opt/gtnh -maxdepth 3 -type f \( \
+      -name 'startserver-java9.sh' \
+      -o -name 'startserver.sh' \
+      -o -name '*.jar' \
+      -o -name 'server.properties' \
+      -o -name 'eula.txt' \
+    \) -print | sort
 
 USER app
 ENV MEMORY=6G
