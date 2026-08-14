@@ -167,7 +167,7 @@ jobs:
             GTNH_SERVER_SHA256=${{ needs.discover.outputs.sha256 }}
             VCS_REF=${{ github.sha }}
             BUILD_DATE=${{ github.event.head_commit.timestamp || github.run_started_at }}
-          secret-files: |
+          build-contexts: |
             gtnh_server_pack=server-pack/${{ needs.discover.outputs.filename }}
           cache-from: type=gha,scope=gtnh-${{ needs.discover.outputs.channel }}
           cache-to: type=gha,mode=max,scope=gtnh-${{ needs.discover.outputs.channel }}

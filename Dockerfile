@@ -24,6 +24,7 @@ RUN apk add --no-cache ca-certificates unzip \
  && addgroup -S app \
  && adduser -S app -G app
 
+COPY --from=server-pack /${GTNH_SERVER_FILENAME} /tmp/server-pack.zip
 COPY --chown=app:app scripts/entrypoint.sh /usr/local/bin/gtnh-entrypoint
 RUN chmod 0755 /usr/local/bin/gtnh-entrypoint \
  && mkdir -p /opt/gtnh /minecraft \
