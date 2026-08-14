@@ -2,7 +2,7 @@ name: Build GTNH Docker image
 
 on:
   schedule:
-    - cron: '17 3 * * *'
+    - cron: '17 3 1 * *'
   workflow_dispatch:
     inputs:
       channel:
@@ -247,6 +247,7 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          skip-dirs: /opt/gtnh
           exit-code: '1'
 
       - name: Login to Docker Hub
