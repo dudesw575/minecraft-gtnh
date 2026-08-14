@@ -112,13 +112,13 @@ jobs:
           major_minor="$(printf '%s' "$version" | sed -E 's/^([0-9]+\.[0-9]+)\..*/\1/')"
           case "$channel" in
             stable)
-              tags="${IMAGE}:${version}\n${IMAGE}:${major_minor}\n${IMAGE}:latest"
+              printf -v tags '%s\n%s\n%s' "${IMAGE}:${version}" "${IMAGE}:${major_minor}" "${IMAGE}:latest"
               ;;
             beta)
-              tags="${IMAGE}:${version}\n${IMAGE}:${major_minor}\n${IMAGE}:beta"
+              printf -v tags '%s\n%s\n%s' "${IMAGE}:${version}" "${IMAGE}:${major_minor}" "${IMAGE}:beta"
               ;;
             nightly)
-              tags="${IMAGE}:${version}\n${IMAGE}:${major_minor}-nightly\n${IMAGE}:nightly"
+              printf -v tags '%s\n%s\n%s' "${IMAGE}:${version}" "${IMAGE}:${major_minor}-nightly" "${IMAGE}:nightly"
               ;;
           esac
           printf 'tags<<EOF\n%s\nEOF\n' "$tags" >> "$GITHUB_OUTPUT"
@@ -196,6 +196,7 @@ jobs:
 
           deadline=$((SECONDS + 900))
           ready=false
+          port_ready=false
           while [ "$SECONDS" -lt "$deadline" ]; do
             if ! docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null | grep -qx true; then
               echo 'GTNH server process exited before reaching ready state.' >&2
@@ -203,19 +204,25 @@ jobs:
               exit 1
             fi
 
+            if timeout 2 bash -c '</dev/tcp/127.0.0.1/25565' 2>/dev/null; then
+              port_ready=true
+              echo 'Minecraft TCP port 25565 is listening.'
+            fi
+
             if docker logs "$container" 2>&1 | grep -q 'Done ('; then
               ready=true
               break
-            fi
-
-            if timeout 2 bash -c '</dev/tcp/127.0.0.1/25565' 2>/dev/null; then
-              echo 'Minecraft TCP port 25565 is listening.'
             fi
             sleep 5
           done
 
           if [ "$ready" != true ]; then
             echo 'Timed out waiting for GTNH server readiness.' >&2
+            docker logs "$container" >&2 || true
+            exit 1
+          fi
+          if [ "$port_ready" != true ]; then
+            echo 'GTNH reported ready but TCP port 25565 never became reachable.' >&2
             docker logs "$container" >&2 || true
             exit 1
           fi
