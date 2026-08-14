@@ -37,24 +37,18 @@ import json, sys, re
 links=json.loads(sys.stdin.read()); version,mode=sys.argv[1:]
 
 def official(h): return h and h.startswith("https://downloads.gtnewhorizons.com/ServerPacks/")
-# Exact-version selection: the official history page exposes the actual server
-# ZIP href, so we select the Java 17-25 Server ZIP rather than guessing it.
+
 if mode == "version":
     for i,l in enumerate(links):
         if l["text"].lower() == "java 17-25 zip" and official(l["href"]):
-            # The link order is stable within each release: Prism 17-25, Prism
-            # 8, Server 17-25, Server 8, Vanilla. Match the filename's version
-            # when available, otherwise the caller's page/section filtering
-            # prevents cross-release selection.
             if version in l["href"]:
                 print(l["href"]); raise SystemExit
-    raise SystemExit(f"No official Java 17-25 Server ZIP found for GTNH {version}")
+    raise SystemExit("No official Java 17-25 Server ZIP found for GTNH {}".format(version))
 
-# The downloads page labels the current Server ZIP explicitly as Latest.
-needle=f"Latest ({version}) for Java 17-25"
+needle = "Latest ({}) for Java 17-25".format(version)
 for l in links:
     if l["text"] == needle and official(l["href"]): print(l["href"]); raise SystemExit
-raise SystemExit(f"No official Server ZIP link found for {needle}")
+raise SystemExit("No official Server ZIP link found for {}".format(needle))
 ' <<<"$(parse_links "$html")" "$version" "$mode"
 }
 
