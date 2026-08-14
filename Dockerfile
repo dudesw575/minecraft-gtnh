@@ -1,4 +1,5 @@
-FROM eclipse-temurin:8-jre-alpine
+# syntax=docker/dockerfile:1
+FROM eclipse-temurin:21-jre-alpine
 
 ARG GTNH_VERSION
 ARG GTNH_SERVER_URL
@@ -30,13 +31,11 @@ RUN chmod 0755 /usr/local/bin/gtnh-entrypoint \
  && mkdir -p /opt/gtnh /minecraft \
  && chown -R app:app /opt/gtnh /minecraft
 
-USER app
-
-ENV MEMORY=6G
-
 VOLUME ["/minecraft"]
 EXPOSE 25565/tcp
 
+# The workflow downloads and verifies the official GTNH server ZIP. BuildKit
+# keeps the archive out of the image history and final image layers.
 RUN --mount=type=secret,id=gtnh_server_pack,target=/tmp/gtnh-server.zip \
     test -s /tmp/gtnh-server.zip \
  && if [ -n "$GTNH_SERVER_SHA256" ]; then \
@@ -44,7 +43,12 @@ RUN --mount=type=secret,id=gtnh_server_pack,target=/tmp/gtnh-server.zip \
     fi \
  && unzip -q /tmp/gtnh-server.zip -d /opt/gtnh \
  && rm -f /tmp/gtnh-server.zip \
- && test -n "$(find /opt/gtnh -maxdepth 3 -type f -name 'forge-*.jar' ! -name '*sources*' ! -name '*javadoc*' -print -quit)" \
+ && test -n "$(find /opt/gtnh -maxdepth 4 -type f -name 'forge-*.jar' ! -name '*sources*' ! -name '*javadoc*' -print -quit)" \
+ && test -n "$(find /opt/gtnh -maxdepth 4 -type f -name 'server.properties' -print -quit)" \
+ && test -n "$(find /opt/gtnh -maxdepth 4 -type f -name 'eula.txt' -print -quit)" \
  && chown -R app:app /opt/gtnh
+
+USER app
+ENV MEMORY=6G
 
 ENTRYPOINT ["/usr/local/bin/gtnh-entrypoint"]
