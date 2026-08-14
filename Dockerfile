@@ -41,6 +41,15 @@ RUN --mount=type=secret,id=gtnh_server_pack,target=/tmp/gtnh-server.zip \
  && rm -f /tmp/gtnh-server.zip \
  && START_SCRIPT="$(find /opt/gtnh -maxdepth 2 -type f \( -name 'startserver-java9.sh' -o -name 'startserver.sh' \) -print | sort | head -n 1)" \
  && test -n "$START_SCRIPT" \
+ && if [ "$(dirname "$START_SCRIPT")" != /opt/gtnh ]; then \
+      ROOT="$(dirname "$START_SCRIPT")"; \
+      COUNT="$(find /opt/gtnh -mindepth 1 -maxdepth 1 -type d | wc -l)"; \
+      [ "$COUNT" -eq 1 ] || { echo "Unsupported GTNH server ZIP layout: multiple top-level directories" >&2; exit 1; }; \
+      cp -a "$ROOT/." /opt/gtnh/; \
+      rm -rf "$ROOT"; \
+    fi \
+ && START_SCRIPT="$(find /opt/gtnh -maxdepth 1 -type f \( -name 'startserver-java9.sh' -o -name 'startserver.sh' \) -print | sort | head -n 1)" \
+ && test -n "$START_SCRIPT" \
  && START_CMD="$(tr '\\n' ' ' < "$START_SCRIPT" | sed 's/\\\\//g')" \
  && SERVER_JAR="$(printf '%s\\n' "$START_CMD" | sed -n 's/.*-jar[[:space:]]\\+\\([^[:space:]]*\\.jar\\).*/\\1/p' | tail -n 1)" \
  && test -n "$SERVER_JAR" \
