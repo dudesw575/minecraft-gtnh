@@ -1,66 +1,256 @@
-name: Build and push
+name: Build GTNH Docker image
 
 on:
-  push:
-    branches:
-      - "main"
-
-  pull_request:
-    branches:
-      - "main"
-
+  schedule:
+    - cron: '17 3 * * *'
   workflow_dispatch:
-    schedule:
-      - cron: "27 2 * * 4"
+    inputs:
+      channel:
+        description: Release channel
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
+          - nightly
+      version:
+        description: Optional exact GTNH version to build
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gtnh-${{ inputs.channel || 'stable' }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: dudesw575/mc-gtnh
+  DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || 'dudesw575' }}
 
 jobs:
-  docker:
+  discover:
+    name: Discover GTNH release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      server_url: ${{ steps.meta.outputs.server_url }}
+      filename: ${{ steps.meta.outputs.filename }}
+      sha256: ${{ steps.download.outputs.sha256 }}
+      build: ${{ steps.existing.outputs.build }}
+      tags: ${{ steps.tags.outputs.tags }}
+      channel: ${{ steps.channel.outputs.channel }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+
+      - name: Resolve channel
+        id: channel
+        shell: bash
+        run: |
+          channel='${{ inputs.channel }}'
+          if [ -z "$channel" ]; then channel='stable'; fi
+          printf 'channel=%s\n' "$channel" >> "$GITHUB_OUTPUT"
+
+      - name: Discover official GTNH server pack
+        id: meta
+        shell: bash
+        run: |
+          version='${{ inputs.version }}'
+          bash scripts/discover-gtnh.sh '${{ steps.channel.outputs.channel }}' "$version" | tee metadata.txt
+          cat metadata.txt >> "$GITHUB_OUTPUT"
+
+      - name: Check Docker Hub for immutable version tag
+        id: existing
+        shell: bash
+        run: |
+          status="$(curl -sS -o /dev/null -w '%{http_code}' \
+            "https://hub.docker.com/v2/namespaces/dudesw575/repositories/mc-gtnh/tags/${{ steps.meta.outputs.version }}")"
+          if [ "$status" = '200' ]; then
+            echo 'build=false' >> "$GITHUB_OUTPUT"
+            echo "Image tag ${{ steps.meta.outputs.version }} already exists; skipping build."
+          elif [ "$status" = '404' ]; then
+            echo 'build=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "Unexpected Docker Hub response: HTTP $status" >&2
+            exit 1
+          fi
+
+      - name: Download official server pack
+        if: steps.existing.outputs.build == 'true'
+        shell: bash
+        run: |
+          curl -fL --retry 5 --retry-all-errors --connect-timeout 30 \
+            '${{ steps.meta.outputs.server_url }}' \
+            -o '${{ steps.meta.outputs.filename }}'
+          test -s '${{ steps.meta.outputs.filename }}'
+
+      - name: Calculate server-pack checksum
+        if: steps.existing.outputs.build == 'true'
+        id: download
+        shell: bash
+        run: |
+          actual="$(sha256sum '${{ steps.meta.outputs.filename }}' | awk '{print $1}')"
+          echo "sha256=$actual" >> "$GITHUB_OUTPUT"
+          echo "Server-pack archive SHA-256: $actual"
+
+      - name: Calculate image tags
+        if: steps.existing.outputs.build == 'true'
+        id: tags
+        shell: bash
+        run: |
+          version='${{ steps.meta.outputs.version }}'
+          channel='${{ steps.channel.outputs.channel }}'
+          major_minor="$(printf '%s' "$version" | sed -E 's/^([0-9]+\.[0-9]+)\..*/\1/')"
+          case "$channel" in
+            stable)
+              tags="${IMAGE}:${version}\n${IMAGE}:${major_minor}\n${IMAGE}:latest"
+              ;;
+            beta)
+              tags="${IMAGE}:${version}\n${IMAGE}:${major_minor}\n${IMAGE}:beta"
+              ;;
+            nightly)
+              tags="${IMAGE}:${version}\n${IMAGE}:${major_minor}-nightly\n${IMAGE}:nightly"
+              ;;
+          esac
+          printf 'tags<<EOF\n%s\nEOF\n' "$tags" >> "$GITHUB_OUTPUT"
+
+      - name: Upload server pack for build job
+        if: steps.existing.outputs.build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtnh-server-pack-${{ steps.meta.outputs.version }}
+          path: ${{ steps.meta.outputs.filename }}
+          if-no-files-found: error
+          retention-days: 1
+
+  build-test-publish:
+    name: Build, smoke-test, scan, publish
+    needs: discover
+    if: needs.discover.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+
+      - name: Download server pack artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: gtnh-server-pack-${{ needs.discover.outputs.version }}
+          path: server-pack
+
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Build an image from Dockerfile
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Build image for testing
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          load: true
+          push: false
+          tags: gtnh-ci:${{ needs.discover.outputs.version }}
+          build-args: |
+            GTNH_VERSION=${{ needs.discover.outputs.version }}
+            GTNH_SERVER_URL=${{ needs.discover.outputs.server_url }}
+            GTNH_SERVER_FILENAME=${{ needs.discover.outputs.filename }}
+            GTNH_SERVER_SHA256=${{ needs.discover.outputs.sha256 }}
+            VCS_REF=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp || github.run_started_at }}
+          secret-files: |
+            gtnh_server_pack=server-pack/${{ needs.discover.outputs.filename }}
+          cache-from: type=gha,scope=gtnh-${{ needs.discover.outputs.channel }}
+          cache-to: type=gha,mode=max,scope=gtnh-${{ needs.discover.outputs.channel }}
+          provenance: true
+          sbom: true
+
+      - name: Smoke-test server startup
+        shell: bash
         run: |
-          docker build -t dudesw575/mc-gtnh:${{ github.sha }} .
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: "dudesw575/mc-gtnh:${{ github.sha }}"
-          format: "sarif"
-          output: "trivy-results.sarif"
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
+          set -euo pipefail
+          mkdir -p smoke-data
+          container='gtnh-smoke'
+          cleanup() {
+            docker logs "$container" > smoke-server.log 2>&1 || true
+            docker stop -t 30 "$container" >/dev/null 2>&1 || true
+            docker rm -f "$container" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker run -d --name "$container" \
+            -e EULA=TRUE \
+            -e MEMORY=6G \
+            -p 25565:25565 \
+            -v "$PWD/smoke-data:/minecraft" \
+            "gtnh-ci:${{ needs.discover.outputs.version }}"
+
+          deadline=$((SECONDS + 900))
+          ready=false
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            if ! docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null | grep -qx true; then
+              echo 'GTNH server process exited before reaching ready state.' >&2
+              docker logs "$container" >&2 || true
+              exit 1
+            fi
+
+            if docker logs "$container" 2>&1 | grep -q 'Done ('; then
+              ready=true
+              break
+            fi
+
+            if timeout 2 bash -c '</dev/tcp/127.0.0.1/25565' 2>/dev/null; then
+              echo 'Minecraft TCP port 25565 is listening.'
+            fi
+            sleep 5
+          done
+
+          if [ "$ready" != true ]; then
+            echo 'Timed out waiting for GTNH server readiness.' >&2
+            docker logs "$container" >&2 || true
+            exit 1
+          fi
+
+          docker logs "$container" > smoke-server.log
+          test "$(docker inspect -f '{{.State.Running}}' "$container")" = true
+          echo 'GTNH smoke test passed.'
+
+      - name: Upload smoke-test logs
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: "trivy-results.sarif"
-      - name: Run Snyk to check Docker image for vulnerabilities
-        # Snyk can be used to break the build when it detects vulnerabilities.
-        # In this case we want to upload the issues to GitHub Code Scanning
-        continue-on-error: true
-        uses: snyk/actions/docker@14818c4695ecc4045f33c9cee9e795a788711ca4
-        env:
-          # In order to use the Snyk Action you will need to have a Snyk API token.
-          # More details in https://github.com/snyk/actions#getting-your-snyk-token
-          # or you can signup for free at https://snyk.io/login
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          name: gtnh-smoke-logs-${{ needs.discover.outputs.version }}
+          path: smoke-server.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
-          image: dudesw575/mc-gtnh:${{ github.sha }}
-          args: --file=Dockerfile
-      - name: Upload result to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v2
+          image-ref: gtnh-ci:${{ needs.discover.outputs.version }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
         with:
-          sarif_file: snyk.sarif
-      - name: Login to DockerHub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and push
-        uses: docker/build-push-action@v4
-        with:
-          push: true
-          tags: dudesw575/mc-gtnh:2.4.0
+
+      - name: Push tested image tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "Publishing $tag"
+            docker tag "gtnh-ci:${{ needs.discover.outputs.version }}" "$tag"
+            docker push "$tag"
+          done <<'EOF'
+          ${{ needs.discover.outputs.tags }}
+          EOF
