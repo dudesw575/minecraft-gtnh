@@ -21,11 +21,8 @@ extract_server_url_from_history() {
 import html, re, sys
 version, page = sys.argv[1], sys.stdin.read()
 
-# The current GTNH site renders the release type separately from the version
-# heading (for example: <h2>2.8.4</h2> ... Stable release). Do not assume
-# the release type is part of the heading text.
 blocks = re.findall(
-    r"<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\\b|$)",
+    r"<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\b|$)",
     page,
     re.I | re.S,
 )
@@ -34,11 +31,15 @@ for heading, block in blocks:
     heading = html.unescape(re.sub(r"<[^>]+>", "", heading)).strip()
     if heading != version:
         continue
-    server = re.search(r"<h3[^>]*>\s*Server ZIPs\s*</h3>(.*?)(?=<h3\\b|<h2\\b|$)", block, re.I | re.S)
+    server = re.search(
+        r"<h3[^>]*>\s*Server ZIPs\s*</h3>(.*?)(?=<h3\b|<h2\b|$)",
+        block,
+        re.I | re.S,
+    )
     if not server:
         raise SystemExit(f"No Server ZIPs section found for GTNH {version}")
     links = re.findall(
-        r"<a[^>]+href=[\"\\x27]([^\"\\x27]+)[\"\\x27][^>]*>\\s*Java\\s+17-25\\s+ZIP",
+        r"<a[^>]+href=[\"\x27]([^\"\x27]+)[\"\x27][^>]*>\s*Java\s+17-25\s+ZIP",
         server.group(1),
         re.I | re.S,
     )
@@ -62,26 +63,21 @@ latest_release_version() {
 import html, re, sys
 mode, page = sys.argv[1], sys.stdin.read()
 
-# Current GTNH version-history markup has the version in <h2> and the
-# release-channel label in the content immediately following that heading.
-blocks = re.findall(
-    r"<h2[^>]*>\s*([^<]+?)\s*</h2>(.*?)(?=<h2\\b|$)",
-    page,
-    re.I | re.S,
-)
+# Parse the rendered text rather than depending on the exact placement of the
+# release-channel label inside the HTML. The official page currently renders
+# entries such as: 2.8.4 Stable release 2025/12/23.
+text = html.unescape(re.sub(r"<[^>]+>", " ", page))
+text = re.sub(r"\s+", " ", text).strip()
 
 wanted = {"stable": "Stable release", "beta": "Beta release"}[mode]
-for heading, block in blocks:
-    heading = html.unescape(re.sub(r"<[^>]+>", "", heading)).strip()
-    if not re.fullmatch(r"\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9.-]+)?", heading):
-        continue
-    text = html.unescape(re.sub(r"<[^>]+>", " ", block))
-    text = re.sub(r"\\s+", " ", text).strip()
-    if wanted.lower() in text.lower():
-        print(heading)
-        raise SystemExit
-
-raise SystemExit(f"No latest {mode} release was found on the official GTNH version-history page")
+match = re.search(
+    r"(\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?)\s+" + re.escape(wanted) + r"\b",
+    text,
+    re.I,
+)
+if not match:
+    raise SystemExit(f"No latest {mode} release was found on the official GTNH version-history page")
+print(match.group(1))
 ' "$mode" <<<"$page"
 }
 
